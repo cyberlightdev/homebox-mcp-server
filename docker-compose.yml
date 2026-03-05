@@ -1,0 +1,28 @@
+services:
+  homebox:
+    image: ghcr.io/sysadminsmedia/homebox:latest
+    restart: unless-stopped
+    ports:
+      - "7745:7745"
+    environment:
+      - TZ=America/Detroit
+    volumes:
+      - ./data:/data
+
+  homebox-mcp:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+    environment:
+      - HOMEBOX_URL=http://homebox:7745
+      - HOMEBOX_EMAIL=${HOMEBOX_EMAIL}
+      - HOMEBOX_PASSWORD=${HOMEBOX_PASSWORD}
+      - MCP_PORT=8100
+    volumes:
+      - mcp-data:/data
+    depends_on:
+      - homebox
+
+volumes:
+  mcp-data:
