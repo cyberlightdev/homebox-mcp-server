@@ -15,10 +15,10 @@ LOCATIONS = [
 
 
 def _make_ctx(client, sessions, client_id="test-session"):
-    """Build a minimal mock Context with lifespan_state."""
+    """Build a minimal mock Context with lifespan_context."""
     ctx = MagicMock()
     ctx.client_id = client_id
-    ctx.request_context.lifespan_state = {"client": client, "sessions": sessions}
+    ctx.request_context.lifespan_context = {"client": client, "sessions": sessions}
     return ctx
 
 

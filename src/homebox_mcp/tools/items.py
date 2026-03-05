@@ -22,6 +22,10 @@ async def _resolve_location_id(
     """
     if location_name:
         locations = await client.list_locations()
+        query_lower = location_name.lower()
+        exact = [loc for loc in locations if loc["name"].lower() == query_lower]
+        if exact:
+            return exact[0]["id"], exact[0]["name"]
         choices = {loc["id"]: loc["name"] for loc in locations}
         matches = fuzz_process.extractBests(location_name, choices, score_cutoff=60)
         if not matches:
@@ -80,9 +84,9 @@ def register_tools(mcp: FastMCP) -> None:
         ctx: Context,
         location_name: str | None = None,
     ) -> str:
-        client: HomeboxClient = ctx.request_context.lifespan_state["client"]
-        sessions: SessionManager = ctx.request_context.lifespan_state["sessions"]
-        session = sessions.get(ctx.client_id)
+        client: HomeboxClient = ctx.request_context.lifespan_context["client"]
+        sessions: SessionManager = ctx.request_context.lifespan_context["sessions"]
+        session = sessions.get(ctx.client_id or "default")
 
         location_id = ""
         if location_name:
@@ -125,9 +129,9 @@ def register_tools(mcp: FastMCP) -> None:
         notes: str | None = None,
         labels: list[str] | None = None,
     ) -> str:
-        client: HomeboxClient = ctx.request_context.lifespan_state["client"]
-        sessions: SessionManager = ctx.request_context.lifespan_state["sessions"]
-        session = sessions.get(ctx.client_id)
+        client: HomeboxClient = ctx.request_context.lifespan_context["client"]
+        sessions: SessionManager = ctx.request_context.lifespan_context["sessions"]
+        session = sessions.get(ctx.client_id or "default")
 
         try:
             location_id, resolved_location_name = await _resolve_location_id(
@@ -181,9 +185,9 @@ def register_tools(mcp: FastMCP) -> None:
         location_name: str | None = None,
         name: str | None = None,
     ) -> str:
-        client: HomeboxClient = ctx.request_context.lifespan_state["client"]
-        sessions: SessionManager = ctx.request_context.lifespan_state["sessions"]
-        session = sessions.get(ctx.client_id)
+        client: HomeboxClient = ctx.request_context.lifespan_context["client"]
+        sessions: SessionManager = ctx.request_context.lifespan_context["sessions"]
+        session = sessions.get(ctx.client_id or "default")
 
         current = await client.get_item(item_id)
 

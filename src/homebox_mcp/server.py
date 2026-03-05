@@ -16,7 +16,7 @@ from homebox_mcp.session import SessionManager
 
 
 @asynccontextmanager
-async def app_lifespan():
+async def app_lifespan(server: FastMCP):
     """Initialize shared resources available to all tools."""
     client = HomeboxClient(
         base_url=settings.homebox_url,
@@ -34,7 +34,7 @@ async def app_lifespan():
     await client.close()
 
 
-mcp = FastMCP("homebox_mcp", lifespan=app_lifespan)
+mcp = FastMCP("homebox_mcp", lifespan=app_lifespan, host="0.0.0.0", port=settings.mcp_port, stateless_http=True)
 
 from homebox_mcp.tools.locations import register_tools as register_location_tools
 from homebox_mcp.tools.items import register_tools as register_item_tools
@@ -47,7 +47,7 @@ register_session_tools(mcp)
 
 def main():
     """Run the MCP server with streamable HTTP transport."""
-    mcp.run(transport="streamable_http", port=settings.mcp_port)
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":

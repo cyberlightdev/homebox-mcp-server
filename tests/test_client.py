@@ -18,17 +18,17 @@ def client():
 @respx.mock
 async def test_authenticate_stores_token(client):
     respx.post(f"{BASE_URL}/api/v1/users/login").mock(
-        return_value=httpx.Response(200, json={"token": "abc123", "attachmentToken": "", "expiresAt": ""})
+        return_value=httpx.Response(200, json={"token": "Bearer abc123", "attachmentToken": "", "expiresAt": ""})
     )
     client._client = httpx.AsyncClient(base_url=BASE_URL, timeout=30.0)
     await client._authenticate()
-    assert client._token == "abc123"
+    assert client._token == "Bearer abc123"
 
 
 @respx.mock
 async def test_list_locations(client):
     respx.post(f"{BASE_URL}/api/v1/users/login").mock(
-        return_value=httpx.Response(200, json={"token": "tok", "attachmentToken": "", "expiresAt": ""})
+        return_value=httpx.Response(200, json={"token": "Bearer tok", "attachmentToken": "", "expiresAt": ""})
     )
     respx.get(f"{BASE_URL}/api/v1/locations").mock(
         return_value=httpx.Response(200, json=[{"id": "loc1", "name": "Storeroom"}])
@@ -43,7 +43,7 @@ async def test_list_locations(client):
 @respx.mock
 async def test_list_items_extracts_items_array(client):
     respx.post(f"{BASE_URL}/api/v1/users/login").mock(
-        return_value=httpx.Response(200, json={"token": "tok", "attachmentToken": "", "expiresAt": ""})
+        return_value=httpx.Response(200, json={"token": "Bearer tok", "attachmentToken": "", "expiresAt": ""})
     )
     respx.get(f"{BASE_URL}/api/v1/items").mock(
         return_value=httpx.Response(
@@ -62,8 +62,8 @@ async def test_list_items_extracts_items_array(client):
 async def test_request_retries_on_401(client):
     login_route = respx.post(f"{BASE_URL}/api/v1/users/login")
     login_route.side_effect = [
-        httpx.Response(200, json={"token": "tok1", "attachmentToken": "", "expiresAt": ""}),
-        httpx.Response(200, json={"token": "tok2", "attachmentToken": "", "expiresAt": ""}),
+        httpx.Response(200, json={"token": "Bearer tok1", "attachmentToken": "", "expiresAt": ""}),
+        httpx.Response(200, json={"token": "Bearer tok2", "attachmentToken": "", "expiresAt": ""}),
     ]
     locations_route = respx.get(f"{BASE_URL}/api/v1/locations")
     locations_route.side_effect = [
@@ -73,7 +73,7 @@ async def test_request_retries_on_401(client):
 
     await client.connect()
     locations = await client.list_locations()
-    assert client._token == "tok2"
+    assert client._token == "Bearer tok2"
     assert locations[0]["name"] == "Room"
     await client.close()
 
@@ -81,7 +81,7 @@ async def test_request_retries_on_401(client):
 @respx.mock
 async def test_delete_returns_empty_dict(client):
     respx.post(f"{BASE_URL}/api/v1/users/login").mock(
-        return_value=httpx.Response(200, json={"token": "tok", "attachmentToken": "", "expiresAt": ""})
+        return_value=httpx.Response(200, json={"token": "Bearer tok", "attachmentToken": "", "expiresAt": ""})
     )
     respx.delete(f"{BASE_URL}/api/v1/items/item1").mock(
         return_value=httpx.Response(204)

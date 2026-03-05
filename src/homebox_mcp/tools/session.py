@@ -21,8 +21,8 @@ def register_tools(mcp: FastMCP) -> None:
         ),
     )
     async def homebox_get_session(ctx: Context) -> str:
-        sessions: SessionManager = ctx.request_context.lifespan_state["sessions"]
-        session = sessions.get(ctx.client_id)
+        sessions: SessionManager = ctx.request_context.lifespan_context["sessions"]
+        session = sessions.get(ctx.client_id or "default")
 
         result = {
             "current_location": session.current_location,
@@ -38,9 +38,9 @@ def register_tools(mcp: FastMCP) -> None:
         ),
     )
     async def homebox_undo_last(ctx: Context) -> str:
-        client: HomeboxClient = ctx.request_context.lifespan_state["client"]
-        sessions: SessionManager = ctx.request_context.lifespan_state["sessions"]
-        session = sessions.get(ctx.client_id)
+        client: HomeboxClient = ctx.request_context.lifespan_context["client"]
+        sessions: SessionManager = ctx.request_context.lifespan_context["sessions"]
+        session = sessions.get(ctx.client_id or "default")
 
         op = session.last_operation
         if op is None:

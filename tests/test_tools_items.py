@@ -29,7 +29,7 @@ ITEMS = [
 def _make_ctx(client, sessions, client_id="test-session"):
     ctx = MagicMock()
     ctx.client_id = client_id
-    ctx.request_context.lifespan_state = {"client": client, "sessions": sessions}
+    ctx.request_context.lifespan_context = {"client": client, "sessions": sessions}
     return ctx
 
 

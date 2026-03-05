@@ -12,9 +12,16 @@ from homebox_mcp.session import SessionManager
 
 
 def _fuzzy_match_location(query: str, locations: list[dict], score_cutoff: int = 60) -> list[dict]:
-    """Return locations whose names fuzzy-match query above the score cutoff."""
+    """Return locations whose names fuzzy-match query above the score cutoff.
+
+    Exact case-insensitive matches are returned immediately without fuzzy scoring.
+    """
     if not locations:
         return []
+    query_lower = query.lower()
+    exact = [loc for loc in locations if loc["name"].lower() == query_lower]
+    if exact:
+        return exact
     choices = {loc["id"]: loc["name"] for loc in locations}
     matches = fuzz_process.extractBests(query, choices, score_cutoff=score_cutoff)
     matched_ids = {loc_id for _, _, loc_id in matches}
@@ -33,9 +40,9 @@ def register_tools(mcp: FastMCP) -> None:
         ),
     )
     async def homebox_set_location(name: str, ctx: Context) -> str:
-        client: HomeboxClient = ctx.request_context.lifespan_state["client"]
-        sessions: SessionManager = ctx.request_context.lifespan_state["sessions"]
-        session = sessions.get(ctx.client_id)
+        client: HomeboxClient = ctx.request_context.lifespan_context["client"]
+        sessions: SessionManager = ctx.request_context.lifespan_context["sessions"]
+        session = sessions.get(ctx.client_id or "default")
 
         locations = await client.list_locations()
         matches = _fuzzy_match_location(name, locations, score_cutoff=60)
@@ -70,9 +77,9 @@ def register_tools(mcp: FastMCP) -> None:
         parent_name: str | None = None,
         description: str | None = None,
     ) -> str:
-        client: HomeboxClient = ctx.request_context.lifespan_state["client"]
-        sessions: SessionManager = ctx.request_context.lifespan_state["sessions"]
-        session = sessions.get(ctx.client_id)
+        client: HomeboxClient = ctx.request_context.lifespan_context["client"]
+        sessions: SessionManager = ctx.request_context.lifespan_context["sessions"]
+        session = sessions.get(ctx.client_id or "default")
 
         parent_id: str | None = None
         parent_display: str = "(top-level)"
@@ -123,7 +130,7 @@ def register_tools(mcp: FastMCP) -> None:
         ),
     )
     async def homebox_search_locations(query: str, ctx: Context) -> str:
-        client: HomeboxClient = ctx.request_context.lifespan_state["client"]
+        client: HomeboxClient = ctx.request_context.lifespan_context["client"]
 
         locations = await client.list_locations()
         matches = _fuzzy_match_location(query, locations, score_cutoff=50)

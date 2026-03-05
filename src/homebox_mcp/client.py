@@ -44,11 +44,11 @@ class HomeboxClient:
 
         Handles token refresh on 401, raises descriptive errors.
         """
-        headers = {"Authorization": f"Bearer {self._token}"}
+        headers = {"Authorization": self._token}
         resp = await self._client.request(method, path, headers=headers, **kwargs)
         if resp.status_code == 401:
             await self._authenticate()
-            headers["Authorization"] = f"Bearer {self._token}"
+            headers["Authorization"] = self._token
             resp = await self._client.request(method, path, headers=headers, **kwargs)
         if not resp.is_success:
             raise RuntimeError(f"Homebox API error {resp.status_code}: {resp.text}")
