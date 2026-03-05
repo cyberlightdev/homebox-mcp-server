@@ -1,4 +1,4 @@
-# homebox-ai-mcp
+# homebox-mcp-server
 
 MCP server enabling LLM-driven inventory management via [Homebox](https://homebox.software).
 
@@ -48,7 +48,7 @@ docker run -d \
   -e HOMEBOX_EMAIL=you@example.com \
   -e HOMEBOX_PASSWORD=yourpassword \
   -p 8100:8100 \
-  ghcr.io/yourusername/homebox-ai-mcp:latest
+  ghcr.io/yourusername/homebox-mcp-server:latest
 ```
 
 Or with Docker Compose, add this service to your existing `compose.yml`:
@@ -56,7 +56,7 @@ Or with Docker Compose, add this service to your existing `compose.yml`:
 ```yaml
 services:
   homebox-mcp:
-    image: ghcr.io/yourusername/homebox-ai-mcp:latest
+    image: ghcr.io/yourusername/homebox-mcp-server:latest
     environment:
       HOMEBOX_URL: http://homebox:7745   # adjust to your Homebox host
       HOMEBOX_EMAIL: you@example.com
@@ -93,7 +93,7 @@ This server uses the streamable HTTP transport, which is supported by Claude Des
 ```
 LLM (Claude / Open WebUI / custom app)
     ↓ MCP protocol (streamable HTTP, port 8100)
-homebox-ai-mcp (this project)
+homebox-mcp-server (this project)
     ↓ REST API (HTTP)
 Homebox (Go app, port 7745)
 ```
@@ -127,7 +127,7 @@ docker run -d \
   -e HOMEBOX_PASSWORD=yourpassword \
   -v homebox-mcp-data:/data \
   -p 8100:8100 \
-  ghcr.io/yourusername/homebox-ai-mcp:latest
+  ghcr.io/yourusername/homebox-mcp-server:latest
 ```
 
 Or in Docker Compose:
@@ -135,7 +135,7 @@ Or in Docker Compose:
 ```yaml
 services:
   homebox-mcp:
-    image: ghcr.io/yourusername/homebox-ai-mcp:latest
+    image: ghcr.io/yourusername/homebox-mcp-server:latest
     environment:
       HOMEBOX_URL: http://homebox:7745
       HOMEBOX_EMAIL: you@example.com
