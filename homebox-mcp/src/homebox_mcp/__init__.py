@@ -1,1 +1,0 @@
-"""Homebox AI MCP Server."""
