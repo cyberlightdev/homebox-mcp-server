@@ -53,17 +53,19 @@ services:
     restart: unless-stopped
     volumes:
       - .:/models
+    environment:
+      - LLAMA_CPP_MODEL=${LLAMA_CPP_MODEL:-model.gguf}
+      - MMPROJ_MODEL=${MMPROJ_MODEL:-}
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - "--model"
-      - "/models/${LLAMA_CPP_MODEL:-model.gguf}"
-      - "--n-gpu-layers"
-      - "99"
-      - "--ctx-size"
-      - "8192"
-      - "--chat-template-kwargs"
-      - '{"enable_thinking":false}'
-      - "--port"
-      - "8080"
+      - >
+        /llama-server
+        --model /models/${LLAMA_CPP_MODEL:-model.gguf}
+        --n-gpu-layers 99
+        --ctx-size 8192
+        --chat-template-kwargs '{"enable_thinking":false}'
+        --port 8080
+        ${MMPROJ_MODEL:+--mmproj /models/$MMPROJ_MODEL}
     deploy:
       resources:
         reservations:

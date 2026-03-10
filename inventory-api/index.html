@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inventory Assistant v4</title>
+  <title>Inventory Assistant v5</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -227,6 +227,10 @@
         <label>GGUF Model</label>
         <select id="cfg-llm-model"></select>
       </div>
+      <div class="field">
+        <label>Vision projector / mmproj (blank = no vision)</label>
+        <select id="cfg-mmproj-model"></select>
+      </div>
     </div>
 
     <div class="field-group">
@@ -304,6 +308,7 @@
   let cfg = {
     wake_word: '',
     silence_ms: 900,
+    mmproj_model: '',
   };
 
   async function loadConfig() {
@@ -719,12 +724,19 @@
   });
   document.getElementById('settings-save').addEventListener('click', saveSettings);
 
+  function updateCameraAvailability() {
+    const hasVision = !!cfg.mmproj_model;
+    cameraLabel.style.opacity = hasVision ? '' : '0.35';
+    cameraLabel.title = hasVision ? 'Attach photo' : 'No vision model configured';
+    cameraInput.disabled = !hasVision;
+  }
+
   async function openSettings() {
-    let config = {}, models = [];
+    let config = {}, models = [], mmproj_models = [];
     try {
       const [cr, mr] = await Promise.all([fetch('/config'), fetch('/models')]);
       config = await cr.json();
-      ({ models } = await mr.json());
+      ({ models, mmproj_models } = await mr.json());
     } catch (e) {
       appendMsg('status', `Could not load settings: ${e.message}`);
       return;
@@ -738,6 +750,11 @@
     modelSel.innerHTML = models.length
       ? models.map(m => `<option value="${m}"${m === config.llama_cpp_model ? ' selected' : ''}>${m}</option>`).join('')
       : `<option value="${config.llama_cpp_model}">${config.llama_cpp_model}</option>`;
+
+    const mmprojSel = document.getElementById('cfg-mmproj-model');
+    mmprojSel.innerHTML = `<option value="">— none (no vision) —</option>` +
+      mmproj_models.map(m => `<option value="${m}"${m === config.mmproj_model ? ' selected' : ''}>${m}</option>`).join('');
+    if (!config.mmproj_model) mmprojSel.value = '';
 
     document.getElementById('cfg-whisper-model').value  = config.whisper_model || 'small';
     document.getElementById('cfg-kokoro-voice').value   = config.kokoro_voice || 'af_sky';
@@ -762,6 +779,7 @@
       homebox_email:    document.getElementById('cfg-homebox-email').value.trim(),
       homebox_password: document.getElementById('cfg-homebox-password').value,
       llama_cpp_model:  document.getElementById('cfg-llm-model').value,
+      mmproj_model:     document.getElementById('cfg-mmproj-model').value,
       whisper_model:    document.getElementById('cfg-whisper-model').value,
       kokoro_voice:     document.getElementById('cfg-kokoro-voice').value,
       history_turns:    parseInt(document.getElementById('cfg-history-turns').value, 10),
@@ -782,6 +800,9 @@
       return;
     }
 
+    cfg.mmproj_model = payload.mmproj_model;
+    updateCameraAvailability();
+
     appendMsg('status', 'Settings saved — applied immediately.');
     if (llamaRestartNeeded) {
       appendMsg('status', 'LLM model changed — run: docker compose restart llama-cpp');
@@ -791,8 +812,12 @@
   // ================================================================
   // Init
   // ================================================================
-  loadConfig();
-  updateSession();
+  async function init() {
+    await loadConfig();
+    updateCameraAvailability();
+    updateSession();
+  }
+  init();
 </script>
 </body>
 </html>

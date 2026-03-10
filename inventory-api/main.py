@@ -36,6 +36,7 @@ def _default_config() -> dict:
         "homebox_email":  os.getenv("HOMEBOX_EMAIL",  ""),
         "homebox_password": os.getenv("HOMEBOX_PASSWORD", ""),
         "llama_cpp_model": os.getenv("LLAMA_CPP_MODEL", "model.gguf"),
+        "mmproj_model":   os.getenv("MMPROJ_MODEL",   ""),
         "whisper_model":  os.getenv("WHISPER_MODEL",  "small"),
         "kokoro_voice":   os.getenv("KOKORO_VOICE",   "af_sky"),
         "history_turns":  int(os.getenv("HISTORY_TURNS", "6")),
@@ -160,6 +161,7 @@ class ConfigUpdate(BaseModel):
     homebox_email: str
     homebox_password: str = ""  # blank = keep existing
     llama_cpp_model: str
+    mmproj_model: str = ""
     whisper_model: str
     kokoro_voice: str
     history_turns: int
@@ -167,7 +169,8 @@ class ConfigUpdate(BaseModel):
 
 @app.post("/config")
 def save_config(data: ConfigUpdate):
-    prev_model = _cfg.get("llama_cpp_model")
+    prev_model  = _cfg.get("llama_cpp_model")
+    prev_mmproj = _cfg.get("mmproj_model", "")
 
     # Build the update dict — omit blank password so we don't clobber it
     update = data.model_dump(exclude_none=True)
@@ -191,15 +194,20 @@ def save_config(data: ConfigUpdate):
         _cfg["homebox_url"], _cfg["homebox_email"], _cfg["homebox_password"]
     )
 
-    llama_restart_needed = _cfg["llama_cpp_model"] != prev_model
+    llama_restart_needed = (
+        _cfg["llama_cpp_model"] != prev_model or
+        _cfg.get("mmproj_model", "") != prev_mmproj
+    )
     return {"ok": True, "llama_restart_needed": llama_restart_needed}
 
 
 @app.get("/models")
 def list_models():
     p = Path("/models")
-    models = sorted(f.name for f in p.glob("*.gguf")) if p.exists() else []
-    return {"models": models}
+    all_ggufs = sorted(f.name for f in p.glob("*.gguf")) if p.exists() else []
+    models       = [f for f in all_ggufs if "mmproj" not in f.lower()]
+    mmproj_models = [f for f in all_ggufs if "mmproj" in f.lower()]
+    return {"models": models, "mmproj_models": mmproj_models}
 
 
 # ------------------------------------------------------------------
