@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inventory Assistant</title>
+  <title>Inventory Assistant v3</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -312,7 +312,7 @@
       if (!r.ok) return;
       Object.assign(cfg, await r.json());
       // Also restore any local-only config from sessionStorage
-      cfg.wake_word = sessionStorage.getItem('wake_word') || '';
+      cfg.wake_word  = sessionStorage.getItem('wake_word') || '';
       cfg.silence_ms = parseInt(sessionStorage.getItem('silence_ms') || '900', 10);
     } catch {}
   }
@@ -346,14 +346,17 @@
   let vadCtx      = null;
   let vadAnalyser = null;
   let vadData     = null;
-  let convRec     = null;
-  let convChunks  = [];
-  let speechTimer = null;
+  let convRec    = null;
+  let convChunks = [];
+  let speechTimer  = null;
   let silenceTimer = null;
 
-  const SPEECH_THRESH = 0.015;
+  const SPEECH_THRESH  = 0.015;
   const SILENCE_THRESH = 0.008;
-  const SPEECH_LEAD_MS = 200; // must be loud for this long to start recording
+  // Recording starts the moment volume exceeds SPEECH_THRESH.
+  // SPEECH_LEAD_MS is just the debounce before we "confirm" speech — the audio
+  // captured during that window becomes the natural pre-roll (catches wake words).
+  const SPEECH_LEAD_MS = 200;
 
   // ================================================================
   // Transcript helpers
@@ -556,10 +559,11 @@
     clearTimeout(silenceTimer);
     speechTimer  = null;
     silenceTimer = null;
-    if (convRec && convRec.state === 'recording') convRec.stop();
+    if (convRec && convRec.state !== 'inactive') convRec.stop();
     convStream?.getTracks().forEach(t => t.stop());
     vadCtx?.close();
-    vadCtx = convStream = vadAnalyser = vadData = null;
+    vadCtx = convStream = vadAnalyser = vadData = convRec = null;
+    convChunks = [];
     micBtn.disabled = false;
     updateConvBtn();
   }
@@ -578,14 +582,27 @@
     if (convState === 'listening') {
       if (rms > SPEECH_THRESH) {
         if (!speechTimer) {
+          // Start recording immediately so audio during the debounce window is captured.
+          // This audio becomes the natural pre-roll that preserves the wake word.
+          convChunks = [];
+          convRec = new MediaRecorder(convStream);
+          convRec.ondataavailable = e => { if (e.data.size > 0) convChunks.push(e.data); };
+          convRec.start();
           speechTimer = setTimeout(() => {
             speechTimer = null;
             if (convState === 'listening') startConvRec();
           }, SPEECH_LEAD_MS);
         }
       } else {
-        clearTimeout(speechTimer);
-        speechTimer = null;
+        if (speechTimer) {
+          // Brief noise — discard the pre-roll recording
+          clearTimeout(speechTimer);
+          speechTimer = null;
+          const rec = convRec;
+          convRec = null;
+          convChunks = [];
+          if (rec && rec.state !== 'inactive') { rec.ondataavailable = () => {}; rec.stop(); }
+        }
       }
     } else if (convState === 'recording') {
       if (rms < SILENCE_THRESH) {
@@ -608,27 +625,27 @@
 
   function startConvRec() {
     if (!convActive) return;
-    convChunks = [];
-    convState  = 'recording';
+    // convRec is already recording (started at first loud frame for pre-roll)
+    convState = 'recording';
     updateConvBtn();
-    convRec = new MediaRecorder(convStream);
-    convRec.ondataavailable = e => { if (e.data.size > 0) convChunks.push(e.data); };
-    convRec.start();
   }
 
   function stopConvRec() {
-    if (!convRec || convRec.state !== 'recording') return;
+    if (convState !== 'recording' || !convRec) return;
     convState = 'processing';
     updateConvBtn();
-    convRec.stop();
     convRec.onstop = async () => {
-      await runPipeline(new Blob(convChunks, { type: 'audio/webm' }));
+      const blob = new Blob(convChunks, { type: 'audio/webm' });
+      convRec   = null;
+      convChunks = [];
+      await runPipeline(blob);
       if (convActive) {
         convState = 'listening';
         updateConvBtn();
         requestAnimationFrame(vadLoop);
       }
     };
+    convRec.stop();
   }
 
   // ================================================================
@@ -680,7 +697,7 @@
     document.getElementById('cfg-kokoro-voice').value   = config.kokoro_voice || 'af_sky';
     document.getElementById('cfg-history-turns').value  = config.history_turns || 6;
     document.getElementById('cfg-wake-word').value      = sessionStorage.getItem('wake_word') || '';
-    document.getElementById('cfg-silence-ms').value     = sessionStorage.getItem('silence_ms') || 900;
+    document.getElementById('cfg-silence-ms').value = sessionStorage.getItem('silence_ms') || 900;
 
     document.getElementById('settings-overlay').classList.remove('hidden');
   }
@@ -689,7 +706,7 @@
     // Local-only settings (VAD tuning — no server round-trip)
     const wakeWord  = document.getElementById('cfg-wake-word').value.trim();
     const silenceMs = parseInt(document.getElementById('cfg-silence-ms').value, 10);
-    sessionStorage.setItem('wake_word', wakeWord);
+    sessionStorage.setItem('wake_word',  wakeWord);
     sessionStorage.setItem('silence_ms', silenceMs);
     cfg.wake_word  = wakeWord;
     cfg.silence_ms = silenceMs;
