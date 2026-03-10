@@ -9,20 +9,90 @@ services:
     volumes:
       - ./data:/data
 
-  homebox-mcp:
-    build: .
+  # Legacy.  Currently unused
+  # homebox-mcp:
+  #   build: ./homebox-mcp/Dockerfile
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8100:8100"
+  #   environment:
+  #     - HOMEBOX_URL=http://homebox:7745
+  #     - HOMEBOX_EMAIL=${HOMEBOX_EMAIL}
+  #     - HOMEBOX_PASSWORD=${HOMEBOX_PASSWORD}
+  #     - MCP_PORT=8100
+  #   depends_on:
+  #     - homebox
+
+  whisper:
+    image: fedirz/faster-whisper-server:latest-cuda
+    container_name: whisper
+    restart: unless-stopped
+    environment:
+      - WHISPER__MODEL=small
+      - API_KEY=local-only
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    # small model uses ~500MB VRAM
+    shm_size: 1gb
+
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
+    container_name: kokoro
+    restart: unless-stopped
+    environment:
+      - API_KEY=local-only
+    # Runs on CPU (5950X) — no GPU needed for TTS
+
+  llama-cpp:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    restart: unless-stopped
+    volumes:
+      - .:/models
+    command:
+      - "--model"
+      - "/models/${LLAMA_CPP_MODEL:-model.gguf}"
+      - "--n-gpu-layers"
+      - "99"
+      - "--ctx-size"
+      - "8192"
+      - "--chat-template-kwargs"
+      - '{"enable_thinking":false}'
+      - "--port"
+      - "8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  inventory-api:
+    build: ./inventory-api
     restart: unless-stopped
     ports:
-      - "8100:8100"
+      - "4004:4003"
     environment:
-      - HOMEBOX_URL=http://homebox:7745
+      # Internal service URLs — container-to-container, not user-configurable
+      - LLAMA_CPP_URL=http://llama-cpp:8080
+      - WHISPER_URL=http://whisper:8000
+      - KOKORO_URL=http://kokoro:8880
+      # Initial values seeded from host .env — overridden by /config/settings.json after first UI save
+      - HOMEBOX_URL=${HOMEBOX_URL:-http://homebox:7745}
       - HOMEBOX_EMAIL=${HOMEBOX_EMAIL}
       - HOMEBOX_PASSWORD=${HOMEBOX_PASSWORD}
-      - MCP_PORT=8100
+      - LLAMA_CPP_MODEL=${LLAMA_CPP_MODEL:-model.gguf}
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - KOKORO_VOICE=${KOKORO_VOICE:-af_sky}
+      - HISTORY_TURNS=${HISTORY_TURNS:-6}
     volumes:
-      - mcp-data:/data
+      - ./config:/config          # persistent config — settings.json written here by UI
+      - .:/models:ro              # read-only — for GGUF file listing
     depends_on:
       - homebox
-
-volumes:
-  mcp-data:
+      - llama-cpp

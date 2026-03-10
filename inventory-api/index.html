@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory Assistant</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f0f;
+      color: #ddd;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      max-width: 660px;
+      margin: 0 auto;
+      padding: 0.75rem;
+      gap: 0.6rem;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: #888;
+      min-height: 1.6rem;
+    }
+    #location-display { color: #6af; flex: 1; }
+    #undo-display { color: #888; }
+    #settings-btn {
+      background: none; border: none; color: #666;
+      font-size: 1.1rem; cursor: pointer; padding: 0 0.2rem;
+      line-height: 1;
+    }
+    #settings-btn:hover { color: #aaa; }
+
+    /* ── Transcript ── */
+    #transcript {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 0.6rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .msg {
+      line-height: 1.45;
+      word-break: break-word;
+      max-width: 90%;
+    }
+    .msg.user     { color: #6af; align-self: flex-end; text-align: right; }
+    .msg.assistant { color: #af6; align-self: flex-start; }
+    .msg.status   { color: #555; font-style: italic; font-size: 0.82rem; align-self: center; }
+
+    /* ── Controls ── */
+    #controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: stretch;
+    }
+    button.ctrl {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      border: 1px solid #333;
+      border-radius: 7px;
+      background: #1e1e1e;
+      color: #ccc;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+      white-space: nowrap;
+    }
+    button.ctrl:active { background: #2a2a2a; }
+    button.ctrl:disabled { opacity: 0.4; cursor: default; }
+
+    #mic-btn        { flex: 1; }
+    #mic-btn.active { background: #4a1a1a; border-color: #c44; color: #f88; }
+
+    #conv-btn          { flex: 1; }
+    #conv-btn.listening { background: #1a3a1a; border-color: #4a4; color: #8f8; }
+    #conv-btn.recording { background: #4a1a1a; border-color: #c44; color: #f88; }
+    #conv-btn.processing { background: #2a2a1a; border-color: #884; color: #cc8; }
+
+    #camera-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 0.8rem;
+      font-size: 1.2rem;
+      border: 1px solid #333;
+      border-radius: 7px;
+      background: #1e1e1e;
+      cursor: pointer;
+      position: relative;
+      line-height: 1;
+    }
+    #camera-label.has-image { border-color: #4a4; }
+    #camera-label.has-image::after {
+      content: '';
+      position: absolute;
+      top: 4px; right: 4px;
+      width: 7px; height: 7px;
+      background: #4f4;
+      border-radius: 50%;
+    }
+    #camera-input { display: none; }
+
+    /* ── Settings modal ── */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .overlay.hidden { display: none; }
+
+    .modal {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 1.25rem;
+      width: min(420px, calc(100vw - 2rem));
+      max-height: calc(100dvh - 2rem);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .modal h2 { font-size: 1rem; color: #aaa; }
+    .modal h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin-top: 0.25rem; }
+    .field-group { display: flex; flex-direction: column; gap: 0.5rem; }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .field label { font-size: 0.78rem; color: #777; }
+    .field input, .field select {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 5px;
+      color: #ccc;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.88rem;
+      width: 100%;
+    }
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: #555;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+      margin-top: 0.25rem;
+    }
+    .modal-actions button {
+      padding: 0.5rem 1.1rem;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #222;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 0.88rem;
+    }
+    .modal-actions button.primary {
+      background: #1e3a1e;
+      border-color: #3a6a3a;
+      color: #8f8;
+    }
+    .modal-actions button:hover { border-color: #666; }
+
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <span id="location-display">No location set</span>
+  <span id="undo-display"></span>
+  <button id="settings-btn" title="Settings">⚙</button>
+</header>
+
+<!-- Transcript -->
+<div id="transcript"></div>
+
+<!-- Controls -->
+<div id="controls">
+  <button class="ctrl" id="mic-btn">Hold to Talk</button>
+  <button class="ctrl" id="conv-btn">🎙 Conv Mode</button>
+  <label id="camera-label" title="Attach photo">
+    📷
+    <input type="file" id="camera-input" accept="image/*" capture="environment">
+  </label>
+</div>
+
+<!-- Settings modal -->
+<div class="overlay hidden" id="settings-overlay">
+  <div class="modal">
+    <h2>Settings</h2>
+
+    <div class="field-group">
+      <h3>Homebox</h3>
+      <div class="field">
+        <label>URL</label>
+        <input id="cfg-homebox-url" type="url" placeholder="http://homebox:7745">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input id="cfg-homebox-email" type="email">
+      </div>
+      <div class="field">
+        <label>Password (leave blank to keep existing)</label>
+        <input id="cfg-homebox-password" type="password" placeholder="••••••••">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <h3>Language Model</h3>
+      <div class="field">
+        <label>GGUF Model</label>
+        <select id="cfg-llm-model"></select>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <h3>Voice</h3>
+      <div class="field">
+        <label>Whisper Model</label>
+        <select id="cfg-whisper-model">
+          <option value="tiny">tiny — fastest, lowest accuracy</option>
+          <option value="base">base</option>
+          <option value="small">small — recommended</option>
+          <option value="medium">medium</option>
+          <option value="large-v2">large-v2</option>
+          <option value="large-v3">large-v3 — best accuracy</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Kokoro Voice</label>
+        <select id="cfg-kokoro-voice">
+          <option value="af">af — American female (default)</option>
+          <option value="af_sky">af_sky</option>
+          <option value="af_bella">af_bella</option>
+          <option value="af_nicole">af_nicole</option>
+          <option value="af_sarah">af_sarah</option>
+          <option value="am_adam">am_adam</option>
+          <option value="am_michael">am_michael</option>
+          <option value="bf_emma">bf_emma — British female</option>
+          <option value="bf_isabella">bf_isabella</option>
+          <option value="bm_george">bm_george — British male</option>
+          <option value="bm_lewis">bm_lewis</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <h3>Conversation Mode</h3>
+      <div class="field">
+        <label>Wake word (blank = respond to everything)</label>
+        <input id="cfg-wake-word" type="text" placeholder="e.g. computer">
+      </div>
+      <div class="field">
+        <label>Silence before submitting (ms)</label>
+        <input id="cfg-silence-ms" type="number" min="300" max="3000" step="100" value="900">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <h3>History</h3>
+      <div class="field">
+        <label>Turns to keep</label>
+        <input id="cfg-history-turns" type="number" min="1" max="20">
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button id="settings-cancel">Cancel</button>
+      <button class="primary" id="settings-save">Save &amp; Restart</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  // ================================================================
+  // Session
+  // ================================================================
+  const SESSION_ID = (() => {
+    let id = sessionStorage.getItem('sid');
+    if (!id) { id = crypto.randomUUID(); sessionStorage.setItem('sid', id); }
+    return id;
+  })();
+
+  // ================================================================
+  // Config (loaded from server, some stored locally for UI use)
+  // ================================================================
+  let cfg = {
+    wake_word: '',
+    silence_ms: 900,
+  };
+
+  async function loadConfig() {
+    try {
+      const r = await fetch('/config');
+      if (!r.ok) return;
+      Object.assign(cfg, await r.json());
+      // Also restore any local-only config from sessionStorage
+      cfg.wake_word = sessionStorage.getItem('wake_word') || '';
+      cfg.silence_ms = parseInt(sessionStorage.getItem('silence_ms') || '900', 10);
+    } catch {}
+  }
+
+  // ================================================================
+  // DOM refs
+  // ================================================================
+  const micBtn        = document.getElementById('mic-btn');
+  const convBtn       = document.getElementById('conv-btn');
+  const cameraInput   = document.getElementById('camera-input');
+  const cameraLabel   = document.getElementById('camera-label');
+  const transcript    = document.getElementById('transcript');
+  const locationEl    = document.getElementById('location-display');
+  const undoEl        = document.getElementById('undo-display');
+
+  // ================================================================
+  // State
+  // ================================================================
+  let isBusy      = false;
+  let pendingImage = null;
+
+  // Push-to-talk state
+  let ptRecorder  = null;
+  let ptChunks    = [];
+  let ptActive    = false;
+
+  // Conversation mode state
+  let convActive  = false;
+  let convState   = 'idle'; // idle | listening | recording | processing
+  let convStream  = null;
+  let vadCtx      = null;
+  let vadAnalyser = null;
+  let vadData     = null;
+  let convRec     = null;
+  let convChunks  = [];
+  let speechTimer = null;
+  let silenceTimer = null;
+
+  const SPEECH_THRESH = 0.015;
+  const SILENCE_THRESH = 0.008;
+  const SPEECH_LEAD_MS = 200; // must be loud for this long to start recording
+
+  // ================================================================
+  // Transcript helpers
+  // ================================================================
+  function appendMsg(role, text) {
+    const el = document.createElement('div');
+    el.className = `msg ${role}`;
+    const prefix = role === 'user' ? 'You' : role === 'assistant' ? 'Assistant' : '';
+    el.textContent = prefix ? `${prefix}: ${text}` : text;
+    transcript.appendChild(el);
+    el.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ================================================================
+  // Session display
+  // ================================================================
+  async function updateSession() {
+    try {
+      const r = await fetch(`/session/${SESSION_ID}`);
+      if (!r.ok) return;
+      const s = await r.json();
+      locationEl.textContent = s.current_location_name
+        ? `Location: ${s.current_location_name}`
+        : 'No location set';
+      undoEl.textContent = s.undo_stack_length > 0
+        ? ` · ${s.undo_stack_length} undo${s.undo_stack_length !== 1 ? 's' : ''}`
+        : '';
+    } catch {}
+  }
+
+  // ================================================================
+  // Core pipeline: blob → transcribe → chat → speak
+  // ================================================================
+  async function runPipeline(audioBlob) {
+    // Transcribe
+    let text;
+    try {
+      const fd = new FormData();
+      fd.append('file', audioBlob, 'audio.webm');
+      const r = await fetch('/transcribe', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      ({ text } = await r.json());
+    } catch (e) {
+      appendMsg('status', `Transcribe error: ${e.message}`);
+      return;
+    }
+
+    if (!text || !text.trim()) return;
+
+    // Wake word filter (conversation mode only)
+    if (convActive && cfg.wake_word) {
+      const ww = cfg.wake_word.trim().toLowerCase();
+      if (!text.toLowerCase().includes(ww)) return; // not a command, ignore
+      // Strip wake word from message
+      const idx = text.toLowerCase().indexOf(ww);
+      text = (text.slice(0, idx) + text.slice(idx + ww.length)).trim();
+      if (!text) return;
+    }
+
+    appendMsg('user', text);
+
+    // Chat
+    let response;
+    try {
+      const body = { message: text };
+      if (pendingImage) { body.image = pendingImage; pendingImage = null; cameraLabel.classList.remove('has-image'); }
+      const r = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Session-ID': SESSION_ID },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      ({ response } = await r.json());
+    } catch (e) {
+      appendMsg('status', `Chat error: ${e.message}`);
+      return;
+    }
+
+    if (!response) return;
+    appendMsg('assistant', response);
+
+    // Speak
+    try {
+      const r = await fetch('/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: response }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const blob = await r.blob();
+      const url  = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      await new Promise(resolve => { audio.onended = () => { URL.revokeObjectURL(url); resolve(); }; audio.play(); });
+    } catch (e) {
+      appendMsg('status', `TTS error: ${e.message}`);
+    }
+
+    updateSession();
+  }
+
+  // ================================================================
+  // Push-to-talk
+  // ================================================================
+  async function ptStart() {
+    if (convActive || isBusy || ptActive) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      ptChunks = [];
+      ptRecorder = new MediaRecorder(stream);
+      ptRecorder.ondataavailable = e => { if (e.data.size > 0) ptChunks.push(e.data); };
+      ptRecorder.start();
+      ptActive = true;
+      micBtn.classList.add('active');
+      micBtn.textContent = 'Recording…';
+    } catch (e) {
+      appendMsg('status', `Mic error: ${e.message}`);
+    }
+  }
+
+  async function ptStop() {
+    if (!ptActive || !ptRecorder) return;
+    ptActive = false;
+    isBusy = true;
+    micBtn.classList.remove('active');
+    micBtn.textContent = 'Processing…';
+    micBtn.disabled = true;
+
+    ptRecorder.stop();
+    ptRecorder.onstop = async () => {
+      ptRecorder.stream.getTracks().forEach(t => t.stop());
+      await runPipeline(new Blob(ptChunks, { type: 'audio/webm' }));
+      micBtn.disabled = false;
+      micBtn.textContent = 'Hold to Talk';
+      isBusy = false;
+    };
+  }
+
+  micBtn.addEventListener('mousedown',  e => { e.preventDefault(); ptStart(); });
+  micBtn.addEventListener('mouseup',    ptStop);
+  micBtn.addEventListener('touchstart', e => { e.preventDefault(); ptStart(); }, { passive: false });
+  micBtn.addEventListener('touchend',   e => { e.preventDefault(); ptStop(); },  { passive: false });
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT') {
+      e.preventDefault(); ptStart();
+    }
+  });
+  document.addEventListener('keyup', e => {
+    if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT') {
+      e.preventDefault(); ptStop();
+    }
+  });
+
+  // ================================================================
+  // Conversation mode (VAD)
+  // ================================================================
+  function updateConvBtn() {
+    const labels = {
+      idle:       ['🎙 Conv Mode', ''],
+      listening:  ['👂 Listening', 'listening'],
+      recording:  ['🔴 Recording', 'recording'],
+      processing: ['⏳ Processing', 'processing'],
+    };
+    const [text, cls] = labels[convActive ? convState : 'idle'];
+    convBtn.textContent = text;
+    convBtn.className = 'ctrl' + (cls ? ` ${cls}` : '');
+  }
+
+  convBtn.addEventListener('click', async () => {
+    if (convActive) {
+      stopConvMode();
+    } else {
+      await startConvMode();
+    }
+  });
+
+  async function startConvMode() {
+    try {
+      convStream  = await navigator.mediaDevices.getUserMedia({ audio: true });
+      vadCtx      = new AudioContext();
+      vadAnalyser = vadCtx.createAnalyser();
+      vadAnalyser.fftSize = 1024;
+      vadData     = new Float32Array(vadAnalyser.fftSize);
+      vadCtx.createMediaStreamSource(convStream).connect(vadAnalyser);
+      convActive = true;
+      convState  = 'listening';
+      micBtn.disabled = true;
+      updateConvBtn();
+      requestAnimationFrame(vadLoop);
+    } catch (e) {
+      appendMsg('status', `Conv mode error: ${e.message}`);
+    }
+  }
+
+  function stopConvMode() {
+    convActive = false;
+    convState  = 'idle';
+    clearTimeout(speechTimer);
+    clearTimeout(silenceTimer);
+    speechTimer  = null;
+    silenceTimer = null;
+    if (convRec && convRec.state === 'recording') convRec.stop();
+    convStream?.getTracks().forEach(t => t.stop());
+    vadCtx?.close();
+    vadCtx = convStream = vadAnalyser = vadData = null;
+    micBtn.disabled = false;
+    updateConvBtn();
+  }
+
+  function getRMS() {
+    vadAnalyser.getFloatTimeDomainData(vadData);
+    let s = 0;
+    for (const v of vadData) s += v * v;
+    return Math.sqrt(s / vadData.length);
+  }
+
+  function vadLoop() {
+    if (!convActive || convState === 'processing') return;
+    const rms = getRMS();
+
+    if (convState === 'listening') {
+      if (rms > SPEECH_THRESH) {
+        if (!speechTimer) {
+          speechTimer = setTimeout(() => {
+            speechTimer = null;
+            if (convState === 'listening') startConvRec();
+          }, SPEECH_LEAD_MS);
+        }
+      } else {
+        clearTimeout(speechTimer);
+        speechTimer = null;
+      }
+    } else if (convState === 'recording') {
+      if (rms < SILENCE_THRESH) {
+        if (!silenceTimer) {
+          silenceTimer = setTimeout(() => {
+            silenceTimer = null;
+            if (convState === 'recording') stopConvRec();
+          }, cfg.silence_ms);
+        }
+      } else {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
+      }
+    }
+
+    if (convActive && convState !== 'processing') {
+      requestAnimationFrame(vadLoop);
+    }
+  }
+
+  function startConvRec() {
+    if (!convActive) return;
+    convChunks = [];
+    convState  = 'recording';
+    updateConvBtn();
+    convRec = new MediaRecorder(convStream);
+    convRec.ondataavailable = e => { if (e.data.size > 0) convChunks.push(e.data); };
+    convRec.start();
+  }
+
+  function stopConvRec() {
+    if (!convRec || convRec.state !== 'recording') return;
+    convState = 'processing';
+    updateConvBtn();
+    convRec.stop();
+    convRec.onstop = async () => {
+      await runPipeline(new Blob(convChunks, { type: 'audio/webm' }));
+      if (convActive) {
+        convState = 'listening';
+        updateConvBtn();
+        requestAnimationFrame(vadLoop);
+      }
+    };
+  }
+
+  // ================================================================
+  // Camera
+  // ================================================================
+  cameraInput.addEventListener('change', () => {
+    const file = cameraInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingImage = reader.result.split(',')[1];
+      cameraLabel.classList.add('has-image');
+      appendMsg('status', 'Photo attached — will send with next message.');
+    };
+    reader.readAsDataURL(file);
+    cameraInput.value = '';
+  });
+
+  // ================================================================
+  // Settings
+  // ================================================================
+  document.getElementById('settings-btn').addEventListener('click', openSettings);
+  document.getElementById('settings-cancel').addEventListener('click', () => {
+    document.getElementById('settings-overlay').classList.add('hidden');
+  });
+  document.getElementById('settings-save').addEventListener('click', saveSettings);
+
+  async function openSettings() {
+    let config = {}, models = [];
+    try {
+      const [cr, mr] = await Promise.all([fetch('/config'), fetch('/models')]);
+      config = await cr.json();
+      ({ models } = await mr.json());
+    } catch (e) {
+      appendMsg('status', `Could not load settings: ${e.message}`);
+      return;
+    }
+
+    document.getElementById('cfg-homebox-url').value    = config.homebox_url || '';
+    document.getElementById('cfg-homebox-email').value  = config.homebox_email || '';
+    document.getElementById('cfg-homebox-password').value = '';
+
+    const modelSel = document.getElementById('cfg-llm-model');
+    modelSel.innerHTML = models.length
+      ? models.map(m => `<option value="${m}"${m === config.llama_cpp_model ? ' selected' : ''}>${m}</option>`).join('')
+      : `<option value="${config.llama_cpp_model}">${config.llama_cpp_model}</option>`;
+
+    document.getElementById('cfg-whisper-model').value  = config.whisper_model || 'small';
+    document.getElementById('cfg-kokoro-voice').value   = config.kokoro_voice || 'af_sky';
+    document.getElementById('cfg-history-turns').value  = config.history_turns || 6;
+    document.getElementById('cfg-wake-word').value      = sessionStorage.getItem('wake_word') || '';
+    document.getElementById('cfg-silence-ms').value     = sessionStorage.getItem('silence_ms') || 900;
+
+    document.getElementById('settings-overlay').classList.remove('hidden');
+  }
+
+  async function saveSettings() {
+    // Local-only settings (VAD tuning — no server round-trip)
+    const wakeWord  = document.getElementById('cfg-wake-word').value.trim();
+    const silenceMs = parseInt(document.getElementById('cfg-silence-ms').value, 10);
+    sessionStorage.setItem('wake_word', wakeWord);
+    sessionStorage.setItem('silence_ms', silenceMs);
+    cfg.wake_word  = wakeWord;
+    cfg.silence_ms = silenceMs;
+
+    const payload = {
+      homebox_url:      document.getElementById('cfg-homebox-url').value.trim(),
+      homebox_email:    document.getElementById('cfg-homebox-email').value.trim(),
+      homebox_password: document.getElementById('cfg-homebox-password').value,
+      llama_cpp_model:  document.getElementById('cfg-llm-model').value,
+      whisper_model:    document.getElementById('cfg-whisper-model').value,
+      kokoro_voice:     document.getElementById('cfg-kokoro-voice').value,
+      history_turns:    parseInt(document.getElementById('cfg-history-turns').value, 10),
+    };
+
+    document.getElementById('settings-overlay').classList.add('hidden');
+
+    let llamaRestartNeeded = false;
+    try {
+      const r = await fetch('/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (r.ok) ({ llama_restart_needed: llamaRestartNeeded } = await r.json());
+    } catch (e) {
+      appendMsg('status', `Settings error: ${e.message}`);
+      return;
+    }
+
+    appendMsg('status', 'Settings saved — applied immediately.');
+    if (llamaRestartNeeded) {
+      appendMsg('status', 'LLM model changed — run: docker compose restart llama-cpp');
+    }
+  }
+
+  // ================================================================
+  // Init
+  // ================================================================
+  loadConfig();
+  updateSession();
+</script>
+</body>
+</html>
